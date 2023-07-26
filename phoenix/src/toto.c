@@ -87,6 +87,7 @@ int main1(void)
 		printk("Failed to start bluetooth scanning (err %d)\n", err);
 		return 0;
 	}
+
 	while (true)
 	{
 		printk("APP REMOTE VOLUME = %u\n",get_remote_volume());

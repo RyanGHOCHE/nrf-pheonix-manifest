@@ -4,9 +4,10 @@ struct bt_scan_manufacturer_data manufacturer_data; //app api
 struct bt_conn *auth_conn;
 struct bt_conn *default_conn; //scan
 
-void set_manufacturer_data (struct bt_scan_manufacturer_data usr_manufacturer_data)
+uint8_t set_manufacturer_data (struct bt_scan_manufacturer_data usr_manufacturer_data)
 {
 	manufacturer_data = usr_manufacturer_data;
+	return (manufacturer_data.data == NULL) ? ERR: 0;
 }
 
 struct bt_scan_manufacturer_data get_manufacturer_data ()
@@ -59,7 +60,7 @@ void scan_filter_no_match(struct bt_scan_device_info *device_info,
 
 		err = bt_conn_le_create(device_info->recv_info->addr,
 					BT_CONN_LE_CREATE_CONN,
-					device_info->conn_param, &conn);
+		void			device_info->conn_param, &conn);
 
 		if (!err) {
 			default_conn = bt_conn_ref(conn);
@@ -72,7 +73,7 @@ void scan_filter_no_match(struct bt_scan_device_info *device_info,
 BT_SCAN_CB_INIT(scan_cb, scan_filter_match, scan_filter_no_match,
 		scan_connecting_error, scan_connecting);
 
-void scan_init(void)
+int scan_init(void)
 {
 	int err;
 
@@ -88,13 +89,15 @@ void scan_init(void)
 	err = bt_scan_filter_add(BT_SCAN_FILTER_TYPE_MANUFACTURER_DATA, &manufacturer_data);
 	if (err) {
 		printk("Scanning filters cannot be set (err %d)\n", err);
-		return;
+		return err;
 	}
 
 	err = bt_scan_filter_enable(BT_SCAN_MANUFACTURER_DATA_FILTER, false);
 	if (err) {
 		printk("Filters cannot be turned on (err %d)\n", err);
+		return err;
 	}
+	return 0;
 }
 
 /**************************/

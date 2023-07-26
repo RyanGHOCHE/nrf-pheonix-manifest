@@ -26,5 +26,4 @@ int button_init(void)
     gpio_init_callback(&button_cb_data, button_pressed, BIT(button.pin));
 	gpio_add_callback(button.port, &button_cb_data);
 	return 0;
-
 }

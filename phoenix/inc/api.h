@@ -24,14 +24,15 @@ typedef uint32_t api_error_t;
  * Get API version.
  * @return API version in 0xMMmmpppp format.
  */
-static uint32_t get_api_version(void);
+uint32_t get_api_version(void);
 
 /**
  * Get firmware version.
- * @return Firmware version in 0xMMmmpppp format.
+ * @return Firmware version in 0xMMmmpppp f#define API_VERSION 0x03060000ormat.
  */
-static uint32_t get_fw_version(void);
+uint32_t get_fw_version(void);
 
+api_error_t set_filter (uint8_t size, uint8_t * manufacturer_id);
 /**
  * Load data into an ASP memory
  * @param offset Offset in word in selected memory
