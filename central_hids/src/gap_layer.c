@@ -3,26 +3,54 @@
 struct bt_conn *default_conn; // 2 times
 struct bt_conn *auth_conn;
 extern struct bt_hogp hogp;
+
+// uint8_t * manufacturer_array [5]={0x58,0x02,0x0f,0x00,0xa5};
+
+// struct bt_scan_manufacturer_data manufacturer_id = {
+// .data_len=5,
+// .data=manufacturer_array
+// };
+// #define ERR -1
+
+uint8_t * manufacturer_id [5] = {0x58,0x02,0x0f,0x00,0xa5};
+
+struct bt_scan_manufacturer_data manufacturer_data = {
+    .data=&manufacturer_id,
+    .data_len=5
+};
+
+// uint8_t set_manufacturer_data (struct bt_scan_manufacturer_data usr_manufacturer_data)
+// {
+// 	manufacturer_data = usr_manufacturer_data;
+// 	return (manufacturer_data.data == NULL) ? ERR: 0;
+// }
+
+// int set_filter(uint8_t size, uint8_t *manufacturer_id)
+// {
+//     struct bt_scan_manufacturer_data manufacturer_data;
+// 	manufacturer_data.data=manufacturer_id;
+//     manufacturer_data.data_len = size;
+// 	return set_manufacturer_data(manufacturer_data);
+// }
+
 void scan_filter_match(struct bt_scan_device_info *device_info,
 			      struct bt_scan_filter_match *filter_match,
 			      bool connectable)
 {
 	char addr[BT_ADDR_LE_STR_LEN];
 
-	if (!filter_match->uuid.match ||
-	    (filter_match->uuid.count != 1)) {
+	if (!filter_match->manufacturer_data.match) { //||
+	    // (filter_match->manufacturer_data.data == NULL)) {
 
 		printk("Invalid device connected\n");
 
 		return;
 	}
 
-	const struct bt_uuid *uuid = filter_match->uuid.uuid[0];
-
 	bt_addr_le_to_str(device_info->recv_info->addr, addr, sizeof(addr));
 
-	printk("Filters matched on UUID 0x%04x.\nAddress: %s connectable: %s\n",
-		BT_UUID_16(uuid)->val,
+	printk("Filters matched on manufaturer id .\nAddress: %s connectable: %s\n",
+		// filter_match->manufacturer_data.data,
 		addr, connectable ? "yes" : "no");
 }
 
@@ -43,7 +71,6 @@ void scan_filter_no_match(struct bt_scan_device_info *device_info,
 	int err;
 	struct bt_conn *conn;
 	char addr[BT_ADDR_LE_STR_LEN];
-
 	if (device_info->recv_info->adv_type == BT_GAP_ADV_TYPE_ADV_DIRECT_IND) {
 		bt_addr_le_to_str(device_info->recv_info->addr, addr,
 				  sizeof(addr));
@@ -77,14 +104,14 @@ void scan_init(void)
 	bt_scan_init(&scan_init);
 	bt_scan_cb_register(&scan_cb);
 
-	err = bt_scan_filter_add(BT_SCAN_FILTER_TYPE_UUID, BT_UUID_HIDS);
+	err = bt_scan_filter_add(BT_SCAN_FILTER_TYPE_MANUFACTURER_DATA, &manufacturer_data);
 	if (err) {
 		printk("Scanning filters cannot be set (err %d)\n", err);
 
 		return;
 	}
 
-	err = bt_scan_filter_enable(BT_SCAN_UUID_FILTER, false);
+	err = bt_scan_filter_enable(BT_SCAN_MANUFACTURER_DATA_FILTER, false);
 	if (err) {
 		printk("Filters cannot be turned on (err %d)\n", err);
 	}

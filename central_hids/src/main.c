@@ -24,6 +24,7 @@
 #include <dk_buttons_and_leds.h>
 #include "gap_layer.h"
 #include <zephyr/settings/settings.h>
+
 extern struct bt_hogp hogp;
 extern const struct bt_hogp_init_params hogp_init_params;
 extern struct bt_conn_auth_cb conn_auth_callbacks;
@@ -32,6 +33,13 @@ extern struct bt_conn_auth_info_cb conn_auth_info_callbacks;
 int main(void)
 {
 	int err;
+
+	// uint8_t * manufacturer_id [5] = {0x58,0x02,0x0f,0x00,0xa5};
+	// err = set_filter(5,manufacturer_id);
+	// if (err)
+	// {
+	// 	printk("Set filter failed (err %d)\n", err);
+	// }
 
 	printk("Starting Bluetooth Central HIDS example\n");
 
@@ -60,6 +68,8 @@ int main(void)
 	if (IS_ENABLED(CONFIG_SETTINGS)) {
 		settings_load();
 	}
+
+
 
 	scan_init();
 

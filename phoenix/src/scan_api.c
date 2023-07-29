@@ -60,7 +60,7 @@ void scan_filter_no_match(struct bt_scan_device_info *device_info,
 
 		err = bt_conn_le_create(device_info->recv_info->addr,
 					BT_CONN_LE_CREATE_CONN,
-		void			device_info->conn_param, &conn);
+					device_info->conn_param, &conn);
 
 		if (!err) {
 			default_conn = bt_conn_ref(conn);
