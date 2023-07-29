@@ -1,5 +1,5 @@
 #include <bluetooth/services/hogp.h>
-
+uint32_t irq_status = 0x00;
 struct bt_hogp hogp;
 
 void hids_on_ready(struct k_work *work);
@@ -132,4 +132,9 @@ void hidc_write_cb(struct bt_hogp *hidc,
 			  uint8_t err)
 {
 	printk("Caps lock sent\n");
+}
+
+void hogp_init(void)
+{
+	bt_hogp_init(&hogp, &hogp_init_params);
 }

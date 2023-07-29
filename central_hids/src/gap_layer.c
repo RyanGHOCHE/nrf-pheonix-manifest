@@ -1,37 +1,26 @@
 #include <bluetooth/scan.h>
 #include <bluetooth/gatt_dm.h>
-struct bt_conn *default_conn; // 2 times
+#include "api.h"
+struct bt_conn *default_conn;
 struct bt_conn *auth_conn;
 extern struct bt_hogp hogp;
 
-// uint8_t * manufacturer_array [5]={0x58,0x02,0x0f,0x00,0xa5};
+uint32_t scan_timeout_value_s = 0;
 
-// struct bt_scan_manufacturer_data manufacturer_id = {
-// .data_len=5,
-// .data=manufacturer_array
-// };
-// #define ERR -1
+void set_scan_timeout_value_s(uint32_t value_s)
+{
+	scan_timeout_value_s = value_s;
+}
 
-uint8_t * manufacturer_id [5] = {0x58,0x02,0x0f,0x00,0xa5};
+static void scan_timeout(void)
+{
+	bt_scan_stop();
+	printk ("Scanning timeout\n");
+}
 
-struct bt_scan_manufacturer_data manufacturer_data = {
-    .data=&manufacturer_id,
-    .data_len=5
+static struct bt_le_scan_cb scan_timeout_callback = {
+	.timeout = scan_timeout,
 };
-
-// uint8_t set_manufacturer_data (struct bt_scan_manufacturer_data usr_manufacturer_data)
-// {
-// 	manufacturer_data = usr_manufacturer_data;
-// 	return (manufacturer_data.data == NULL) ? ERR: 0;
-// }
-
-// int set_filter(uint8_t size, uint8_t *manufacturer_id)
-// {
-//     struct bt_scan_manufacturer_data manufacturer_data;
-// 	manufacturer_data.data=manufacturer_id;
-//     manufacturer_data.data_len = size;
-// 	return set_manufacturer_data(manufacturer_data);
-// }
 
 void scan_filter_match(struct bt_scan_device_info *device_info,
 			      struct bt_scan_filter_match *filter_match,
@@ -95,16 +84,25 @@ void scan_init(void)
 {
 	int err;
 
+	struct bt_le_scan_param scan_param_timeout ={
+		.type = BT_LE_SCAN_TYPE_ACTIVE,
+		.options = BT_LE_SCAN_OPT_FILTER_DUPLICATE,
+		.interval = BT_GAP_SCAN_FAST_INTERVAL,
+		.window = BT_GAP_SCAN_FAST_WINDOW,
+		.timeout = scan_timeout_value_s,
+	};
+
 	struct bt_scan_init_param scan_init = {
 		.connect_if_match = 1,
-		.scan_param = NULL,
+		.scan_param = &scan_param_timeout,
 		.conn_param = BT_LE_CONN_PARAM_DEFAULT
 	};
 
 	bt_scan_init(&scan_init);
+	bt_le_scan_cb_register(&scan_timeout_callback);
 	bt_scan_cb_register(&scan_cb);
 
-	err = bt_scan_filter_add(BT_SCAN_FILTER_TYPE_MANUFACTURER_DATA, &manufacturer_data);
+	err = bt_scan_filter_add(BT_SCAN_FILTER_TYPE_MANUFACTURER_DATA, get_manufacturer_id());
 	if (err) {
 		printk("Scanning filters cannot be set (err %d)\n", err);
 
