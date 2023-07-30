@@ -60,6 +60,7 @@ void scan_filter_no_match(struct bt_scan_device_info *device_info,
 	int err;
 	struct bt_conn *conn;
 	char addr[BT_ADDR_LE_STR_LEN];
+
 	if (device_info->recv_info->adv_type == BT_GAP_ADV_TYPE_ADV_DIRECT_IND) {
 		bt_addr_le_to_str(device_info->recv_info->addr, addr,
 				  sizeof(addr));
@@ -266,29 +267,6 @@ BT_CONN_CB_DEFINE(conn_callbacks) = {
 
 //////////////////////////////////////////////////////////////////////
 
-void auth_passkey_display(struct bt_conn *conn, unsigned int passkey)
-{
-	char addr[BT_ADDR_LE_STR_LEN];
-
-	bt_addr_le_to_str(bt_conn_get_dst(conn), addr, sizeof(addr));
-
-	printk("Passkey for %s: %06u\n", addr, passkey);
-}
-
-
-void auth_passkey_confirm(struct bt_conn *conn, unsigned int passkey)
-{
-	char addr[BT_ADDR_LE_STR_LEN];
-
-	auth_conn = bt_conn_ref(conn);
-
-	bt_addr_le_to_str(bt_conn_get_dst(conn), addr, sizeof(addr));
-
-	printk("Passkey for %s: %06u\n", addr, passkey);
-	printk("Press Button 1 to confirm, Button 2 to reject.\n");
-}
-
-
 void auth_cancel(struct bt_conn *conn)
 {
 	char addr[BT_ADDR_LE_STR_LEN];
@@ -319,8 +297,6 @@ void pairing_failed(struct bt_conn *conn, enum bt_security_err reason)
 }
 
 struct bt_conn_auth_cb conn_auth_callbacks = {
-	.passkey_display = auth_passkey_display,
-	.passkey_confirm = auth_passkey_confirm,
 	.cancel = auth_cancel,
 };
 

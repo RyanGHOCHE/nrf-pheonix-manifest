@@ -25,9 +25,11 @@
 #include "gap_layer.h"
 #include <zephyr/settings/settings.h>
 #include "api.h"
+#include "gpio_button.h"
 
 #define ENABLE true
 #define MANUFACTURER_ID_SIZE 5
+
 extern struct bt_hogp hogp;
 extern const struct bt_hogp_init_params hogp_init_params;
 extern struct bt_conn_auth_cb conn_auth_callbacks;
@@ -41,17 +43,17 @@ void main(void)
 
 	hogp_init();
 
-	// err = bt_conn_auth_cb_register(&conn_auth_callbacks);
-	// if (err) {
-	// 	printk("failed to register authorization callbacks.\n");
-	// 	return 0;
-	// }
+	err = bt_conn_auth_cb_register(&conn_auth_callbacks);
+	if (err) {
+		printk("failed to register authorization callbacks.\n");
+		return 0;
+	}
 
-	// err = bt_conn_auth_info_cb_register(&conn_auth_info_callbacks);
-	// if (err) {
-	// 	printk("Failed to register authorization info callbacks.\n");
-	// 	return 0;
-	// }
+	err = bt_conn_auth_info_cb_register(&conn_auth_info_callbacks);
+	if (err) {
+		printk("Failed to register authorization info callbacks.\n");
+		return 0;
+	}
 
 	err = bt_enable(NULL);
 	if (err) {
@@ -76,10 +78,12 @@ void main(void)
     set_scan_timeout_min(1);
     scan_init();
     err = set_scan(ENABLE);
+
     if (err)
     {
         printk("set_scan failed\n (err %d)\n", err);
         return;
     }
 	printk("Scanning successfully started\n");
+    button_init();
 }
