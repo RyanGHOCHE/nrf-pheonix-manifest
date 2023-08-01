@@ -1,6 +1,6 @@
 
 #include "api.h"
-struct bt_scan_manufacturer_data manufacturer_id ;
+struct bt_scan_manufacturer_data manufacturer_id;
 
 api_error set_scan(bool status)
 {

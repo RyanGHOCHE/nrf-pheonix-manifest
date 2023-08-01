@@ -1,47 +1,86 @@
+/* main.c - Application main entry point */
+
 /*
- * Copyright (c) 2021 Nordic Semiconductor ASA
- * SPDX-License-Identifier: Apache-2.0
+ * Copyright (c) 2018 Nordic Semiconductor ASA
+ *
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
+#include <zephyr/types.h>
+#include <stddef.h>
+#include <errno.h>
 #include <zephyr/kernel.h>
-#include <zephyr/drivers/sensor.h>
+#include <zephyr/sys/printk.h>
 
-#include "app_version.h"
+#include <zephyr/bluetooth/bluetooth.h>
+#include <zephyr/bluetooth/hci.h>
+#include <zephyr/bluetooth/conn.h>
+#include <zephyr/bluetooth/uuid.h>
+#include <zephyr/bluetooth/gatt.h>
+#include <bluetooth/gatt_dm.h>
+#include <zephyr/sys/byteorder.h>
+#include <bluetooth/scan.h>
+#include <bluetooth/services/hogp.h>
+#include <dk_buttons_and_leds.h>
+#include "gap_layer.h"
+#include <zephyr/settings/settings.h>
+#include "api.h"
+#include "gpio_button.h"
+#include "bas.h"
 
-#include <zephyr/logging/log.h>
-LOG_MODULE_REGISTER(main, CONFIG_APP_LOG_LEVEL);
+#define ENABLE true
+#define MANUFACTURER_ID_SIZE 5
+
+extern struct bt_hogp hogp;
+extern const struct bt_hogp_init_params hogp_init_params;
+extern struct bt_conn_auth_cb conn_auth_callbacks;
+extern struct bt_conn_auth_info_cb conn_auth_info_callbacks;
 
 void main(void)
 {
-	int ret;
-	const struct device *sensor;
+	int err;
 
-	printk("Zephyr Example Application %s\n", APP_VERSION_STR);
+	printk("Starting Bluetooth Central HIDS example\n");
 
-	sensor = DEVICE_DT_GET(DT_NODELABEL(examplesensor0));
-	if (!device_is_ready(sensor)) {
-		LOG_ERR("Sensor not ready");
+	hogp_init();
+	bas_client_init();
+
+	err = bt_conn_auth_cb_register(&conn_auth_callbacks);
+	if (err) {
+		printk("failed to register authorization callbacks.\n");
+		return 0;
+	}
+
+	err = bt_conn_auth_info_cb_register(&conn_auth_info_callbacks);
+	if (err) {
+		printk("Failed to register authorization info callbacks.\n");
+		return 0;
+	}
+
+	err = bt_enable(NULL);
+	if (err) {
+		printk("Bluetooth init failed (err %d)\n", err);
 		return;
 	}
 
-	while (1) {
-		struct sensor_value val;
+	printk("Bluetooth initialized\n");
 
-		ret = sensor_sample_fetch(sensor);
-		if (ret < 0) {
-			LOG_ERR("Could not fetch sample (%d)", ret);
-			return;
-		}
-
-		ret = sensor_channel_get(sensor, SENSOR_CHAN_PROX, &val);
-		if (ret < 0) {
-			LOG_ERR("Could not get sample (%d)", ret);
-			return;
-		}
-
-		printk("Sensor value: %d\n", val.val1);
-
-		k_sleep(K_MSEC(1000));
+	if (IS_ENABLED(CONFIG_SETTINGS)) {
+		settings_load();
 	}
-}
 
+    uint8_t manufacturer_id [MANUFACTURER_ID_SIZE]={0x58,0x02,0x0f,0x00,0xa5};
+    set_filter(&manufacturer_id,MANUFACTURER_ID_SIZE);
+    set_scan_timeout_min(1);
+    scan_init();
+    err = set_scan(ENABLE);
+
+    if (err)
+    {
+        printk("set_scan failed\n (err %d)\n", err);
+        return;
+    }
+	printk("Scanning successfully started\n");
+    button_init();
+
+}

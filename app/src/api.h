@@ -1,3 +1,5 @@
+#ifndef NRF_API_H
+#define NRF_API_H
 #include <zephyr/types.h>
 #include <stdbool.h>
 #include <bluetooth/scan.h>
@@ -12,5 +14,6 @@ uint32_t get_fw_version(void);
 api_error set_scan(bool status);
 void set_filter(uint8_t * manuf_id, uint8_t length);
 const void * get_manufacturer_id (void);
-
 void set_scan_timeout_min(uint32_t timeout);
+
+#endif

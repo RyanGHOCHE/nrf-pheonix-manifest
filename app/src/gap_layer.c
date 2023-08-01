@@ -1,10 +1,11 @@
-#include <bluetooth/scan.h>
-#include <bluetooth/gatt_dm.h>
-#include "api.h"
+#include "gap_layer.h"
+
+extern struct bt_hogp hogp;
+extern struct bt_bas_client bas;
+
 struct bt_conn *default_conn;
 struct bt_conn *auth_conn;
-extern struct bt_hogp hogp;
-
+struct bt_conn *connectionn;
 uint32_t scan_timeout_value_s = 0;
 
 void set_scan_timeout_value_s(uint32_t value_s)
@@ -22,17 +23,14 @@ static struct bt_le_scan_cb scan_timeout_callback = {
 	.timeout = scan_timeout,
 };
 
-void scan_filter_match(struct bt_scan_device_info *device_info,
+static void scan_filter_match(struct bt_scan_device_info *device_info,
 			      struct bt_scan_filter_match *filter_match,
 			      bool connectable)
 {
 	char addr[BT_ADDR_LE_STR_LEN];
 
-	if (!filter_match->manufacturer_data.match) { //||
-	    // (filter_match->manufacturer_data.data == NULL)) {
-
+	if (!filter_match->manufacturer_data.match) {
 		printk("Invalid device connected\n");
-
 		return;
 	}
 
@@ -43,18 +41,18 @@ void scan_filter_match(struct bt_scan_device_info *device_info,
 		addr, connectable ? "yes" : "no");
 }
 
-void scan_connecting_error(struct bt_scan_device_info *device_info)
+static void scan_connecting_error(struct bt_scan_device_info *device_info)
 {
 	printk("Connecting failed\n");
 }
 
-void scan_connecting(struct bt_scan_device_info *device_info,
+static void scan_connecting(struct bt_scan_device_info *device_info,
 			    struct bt_conn *conn)
 {
 	default_conn = bt_conn_ref(conn);
 }
 /** .. include_startingpoint_scan_rst */
-void scan_filter_no_match(struct bt_scan_device_info *device_info,
+static void scan_filter_no_match(struct bt_scan_device_info *device_info,
 				 bool connectable)
 {
 	int err;
@@ -118,7 +116,7 @@ void scan_init(void)
 
 ////////////////////////////////////////
 
-void discovery_completed_cb(struct bt_gatt_dm *dm,
+static void discovery_completed_cb(struct bt_gatt_dm *dm,
 				   void *context)
 {
 	int err;
@@ -137,15 +135,49 @@ void discovery_completed_cb(struct bt_gatt_dm *dm,
 		printk("Could not release the discovery data, error "
 		       "code: %d\n", err);
 	}
+
 }
 
-void discovery_service_not_found_cb(struct bt_conn *conn,
+static void bas_discovery_completed_cb(struct bt_gatt_dm *dm,
+				   void *context)
+{
+	int err;
+	err = bt_bas_handles_assign(dm, &bas);
+	if (err) {
+		printk("Could not init BAS client object, error: %d\n", err);
+	}
+
+	if (bt_bas_notify_supported(&bas)) {
+		err = bt_bas_subscribe_battery_level(&bas,
+						     notify_battery_level_cb);
+		if (err) {
+			printk("Cannot subscribe to BAS value notification "
+				"(err: %d)\n", err);
+			/* Continue anyway */
+		}
+	} else {
+		err = bt_bas_start_per_read_battery_level(
+			&bas, BAS_READ_VALUE_INTERVAL, notify_battery_level_cb);
+		if (err) {
+			printk("Could not start periodic read of BAS value\n");
+		}
+	}
+
+	err = bt_gatt_dm_data_release(dm);
+	if (err) {
+		printk("Could not release the discovery data, error "
+		       "code: %d\n", err);
+	}
+
+}
+
+static void discovery_service_not_found_cb(struct bt_conn *conn,
 					   void *context)
 {
 	printk("The service could not be found during the discovery\n");
 }
 
-void discovery_error_found_cb(struct bt_conn *conn,
+static void discovery_error_found_cb(struct bt_conn *conn,
 				     int err,
 				     void *context)
 {
@@ -158,9 +190,14 @@ const struct bt_gatt_dm_cb discovery_cb = {
 	.error_found = discovery_error_found_cb,
 };
 
+const struct bt_gatt_dm_cb bas_discovery_cb = {
+	.completed = bas_discovery_completed_cb,
+	.service_not_found = discovery_service_not_found_cb,
+	.error_found = discovery_error_found_cb,
+};
 
 ///////////////////////////////////////
-void gatt_discover(struct bt_conn *conn)
+static void gatt_discover(struct bt_conn *conn)
 {
 	int err;
 
@@ -175,7 +212,22 @@ void gatt_discover(struct bt_conn *conn)
 	}
 }
 
-void connected(struct bt_conn *conn, uint8_t conn_err)
+static void bas_gatt_discover(struct bt_conn *conn)
+{
+	int err;
+
+	if (conn != default_conn) {
+		return;
+	}
+
+	err = bt_gatt_dm_start(conn, BT_UUID_BAS, &bas_discovery_cb, NULL);
+	if (err) {
+		printk("could not start the discovery procedure, error "
+			"code: %d\n", err);
+	}
+}
+
+static void connected(struct bt_conn *conn, uint8_t conn_err)
 {
 	int err;
 	char addr[BT_ADDR_LE_STR_LEN];
@@ -195,7 +247,6 @@ void connected(struct bt_conn *conn, uint8_t conn_err)
 				       err);
 			}
 		}
-
 		return;
 	}
 
@@ -209,7 +260,7 @@ void connected(struct bt_conn *conn, uint8_t conn_err)
 	}
 }
 
-void disconnected(struct bt_conn *conn, uint8_t reason)
+static void disconnected(struct bt_conn *conn, uint8_t reason)
 {
 	char addr[BT_ADDR_LE_STR_LEN];
 	int err;
@@ -242,7 +293,7 @@ void disconnected(struct bt_conn *conn, uint8_t reason)
 	}
 }
 
-void security_changed(struct bt_conn *conn, bt_security_t level,
+static void security_changed(struct bt_conn *conn, bt_security_t level,
 			     enum bt_security_err err)
 {
 	char addr[BT_ADDR_LE_STR_LEN];
@@ -255,7 +306,7 @@ void security_changed(struct bt_conn *conn, bt_security_t level,
 		printk("Security failed: %s level %u err %d\n", addr, level,
 			err);
 	}
-
+	connectionn=conn;
 	gatt_discover(conn);
 }
 
@@ -267,7 +318,7 @@ BT_CONN_CB_DEFINE(conn_callbacks) = {
 
 //////////////////////////////////////////////////////////////////////
 
-void auth_cancel(struct bt_conn *conn)
+static void auth_cancel(struct bt_conn *conn)
 {
 	char addr[BT_ADDR_LE_STR_LEN];
 
@@ -277,7 +328,7 @@ void auth_cancel(struct bt_conn *conn)
 }
 
 
-void pairing_complete(struct bt_conn *conn, bool bonded)
+static void pairing_complete(struct bt_conn *conn, bool bonded)
 {
 	char addr[BT_ADDR_LE_STR_LEN];
 
@@ -287,7 +338,7 @@ void pairing_complete(struct bt_conn *conn, bool bonded)
 }
 
 
-void pairing_failed(struct bt_conn *conn, enum bt_security_err reason)
+static void pairing_failed(struct bt_conn *conn, enum bt_security_err reason)
 {
 	char addr[BT_ADDR_LE_STR_LEN];
 

@@ -1,8 +1,11 @@
 #include "gpio_button.h"
 
+extern uint32_t irq_status;
 void button_pressed(const struct device *dev, struct gpio_callback *cb, uint32_t pins)
 {
     gpio_pin_toggle_dt(&led);
+	printk("irq-status: %d\n",irq_status);
+    irq_status = 0x00;
 }
 
 int button_init(void)
