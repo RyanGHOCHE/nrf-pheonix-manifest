@@ -4,8 +4,9 @@
 #include <zephyr/bluetooth/conn.h>
 #include <zephyr/bluetooth/gatt.h>
 #include "hogp_api.h"
+#define ERR -1
 
-void set_manufacturer_data (struct bt_scan_manufacturer_data usr_manufacturer_data);
+int set_manufacturer_data (struct bt_scan_manufacturer_data usr_manufacturer_data);
 
 struct bt_scan_manufacturer_data get_manufacturer_data ();
 
@@ -23,7 +24,7 @@ void scan_connecting(struct bt_scan_device_info *device_info,
 void scan_filter_no_match(struct bt_scan_device_info *device_info,
 				 bool connectable);
 
-void scan_init(void);
+int scan_init(void);
 
 /***********************/
 

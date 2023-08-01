@@ -1,38 +1,46 @@
-#include "scan_api.h"
-
-struct bt_scan_manufacturer_data manufacturer_data; //app api
+#include <bluetooth/scan.h>
+#include <bluetooth/gatt_dm.h>
+#include "api.h"
+struct bt_conn *default_conn;
 struct bt_conn *auth_conn;
-struct bt_conn *default_conn; //scan
+extern struct bt_hogp hogp;
 
-uint8_t set_manufacturer_data (struct bt_scan_manufacturer_data usr_manufacturer_data)
+uint32_t scan_timeout_value_s = 0;
+
+void set_scan_timeout_value_s(uint32_t value_s)
 {
-	manufacturer_data = usr_manufacturer_data;
-	return (manufacturer_data.data == NULL) ? ERR: 0;
+	scan_timeout_value_s = value_s;
 }
 
-struct bt_scan_manufacturer_data get_manufacturer_data ()
+static void scan_timeout(void)
 {
-	return manufacturer_data;
+	bt_scan_stop();
+	printk ("Scanning timeout\n");
 }
+
+static struct bt_le_scan_cb scan_timeout_callback = {
+	.timeout = scan_timeout,
+};
 
 void scan_filter_match(struct bt_scan_device_info *device_info,
 			      struct bt_scan_filter_match *filter_match,
 			      bool connectable)
 {
-    static char addr[BT_ADDR_LE_STR_LEN];
-	if (!filter_match->manufacturer_data.match) {
+	char addr[BT_ADDR_LE_STR_LEN];
+
+	if (!filter_match->manufacturer_data.match) { //||
+	    // (filter_match->manufacturer_data.data == NULL)) {
 
 		printk("Invalid device connected\n");
 
 		return;
 	}
-	// if (device_info->recv_info->rssi < rssi_tresh)
-	// {
-	// 	printk("RSSI signal low\n");
-	// 	return;
-	// }
+
 	bt_addr_le_to_str(device_info->recv_info->addr, addr, sizeof(addr));
-    printk("Address:%s\n",addr);
+
+	printk("Filters matched on manufaturer id .\nAddress: %s connectable: %s\n",
+		// filter_match->manufacturer_data.data,
+		addr, connectable ? "yes" : "no");
 }
 
 void scan_connecting_error(struct bt_scan_device_info *device_info)
@@ -52,6 +60,7 @@ void scan_filter_no_match(struct bt_scan_device_info *device_info,
 	int err;
 	struct bt_conn *conn;
 	char addr[BT_ADDR_LE_STR_LEN];
+
 	if (device_info->recv_info->adv_type == BT_GAP_ADV_TYPE_ADV_DIRECT_IND) {
 		bt_addr_le_to_str(device_info->recv_info->addr, addr,
 				  sizeof(addr));
@@ -68,39 +77,46 @@ void scan_filter_no_match(struct bt_scan_device_info *device_info,
 		}
 	}
 }
-
 /** .. include_endpoint_scan_rst */
 BT_SCAN_CB_INIT(scan_cb, scan_filter_match, scan_filter_no_match,
 		scan_connecting_error, scan_connecting);
 
-int scan_init(void)
+void scan_init(void)
 {
 	int err;
 
+	struct bt_le_scan_param scan_param_timeout ={
+		.type = BT_LE_SCAN_TYPE_ACTIVE,
+		.options = BT_LE_SCAN_OPT_FILTER_DUPLICATE,
+		.interval = BT_GAP_SCAN_FAST_INTERVAL,
+		.window = BT_GAP_SCAN_FAST_WINDOW,
+		.timeout = scan_timeout_value_s,
+	};
+
 	struct bt_scan_init_param scan_init = {
 		.connect_if_match = 1,
-		.scan_param = NULL,
+		.scan_param = &scan_param_timeout,
 		.conn_param = BT_LE_CONN_PARAM_DEFAULT
 	};
 
 	bt_scan_init(&scan_init);
+	bt_le_scan_cb_register(&scan_timeout_callback);
 	bt_scan_cb_register(&scan_cb);
 
-	err = bt_scan_filter_add(BT_SCAN_FILTER_TYPE_MANUFACTURER_DATA, &manufacturer_data);
+	err = bt_scan_filter_add(BT_SCAN_FILTER_TYPE_MANUFACTURER_DATA, get_manufacturer_id());
 	if (err) {
 		printk("Scanning filters cannot be set (err %d)\n", err);
-		return err;
+
+		return;
 	}
 
 	err = bt_scan_filter_enable(BT_SCAN_MANUFACTURER_DATA_FILTER, false);
 	if (err) {
 		printk("Filters cannot be turned on (err %d)\n", err);
-		return err;
 	}
-	return 0;
 }
 
-/**************************/
+////////////////////////////////////////
 
 void discovery_completed_cb(struct bt_gatt_dm *dm,
 				   void *context)
@@ -111,7 +127,7 @@ void discovery_completed_cb(struct bt_gatt_dm *dm,
 
 	bt_gatt_dm_data_print(dm);
 
-	err = bt_hogp_handles_assign(dm, get_hogp());
+	err = bt_hogp_handles_assign(dm, &hogp);
 	if (err) {
 		printk("Could not init HIDS client object, error: %d\n", err);
 	}
@@ -136,6 +152,14 @@ void discovery_error_found_cb(struct bt_conn *conn,
 	printk("The discovery procedure failed with %d\n", err);
 }
 
+const struct bt_gatt_dm_cb discovery_cb = {
+	.completed = discovery_completed_cb,
+	.service_not_found = discovery_service_not_found_cb,
+	.error_found = discovery_error_found_cb,
+};
+
+
+///////////////////////////////////////
 void gatt_discover(struct bt_conn *conn)
 {
 	int err;
@@ -151,8 +175,6 @@ void gatt_discover(struct bt_conn *conn)
 	}
 }
 
-/***************/
-
 void connected(struct bt_conn *conn, uint8_t conn_err)
 {
 	int err;
@@ -167,7 +189,7 @@ void connected(struct bt_conn *conn, uint8_t conn_err)
 			default_conn = NULL;
 
 			/* This demo doesn't require active scan */
-			err = bt_scan_start(BT_SCAN_TYPE_SCAN_PASSIVE);
+			err = bt_scan_start(BT_SCAN_TYPE_SCAN_ACTIVE);
 			if (err) {
 				printk("Scanning failed to start (err %d)\n",
 				       err);
@@ -201,9 +223,9 @@ void disconnected(struct bt_conn *conn, uint8_t reason)
 
 	printk("Disconnected: %s (reason %u)\n", addr, reason);
 
-	if (bt_hogp_assign_check(get_hogp())) {
+	if (bt_hogp_assign_check(&hogp)) {
 		printk("HIDS client active - releasing");
-		bt_hogp_release(get_hogp());
+		bt_hogp_release(&hogp);
 	}
 
 	if (default_conn != conn) {
@@ -214,7 +236,7 @@ void disconnected(struct bt_conn *conn, uint8_t reason)
 	default_conn = NULL;
 
 	/* This demo doesn't require active scan */
-	err = bt_scan_start(BT_SCAN_TYPE_SCAN_PASSIVE);
+	err = bt_scan_start(BT_SCAN_TYPE_SCAN_ACTIVE);
 	if (err) {
 		printk("Scanning failed to start (err %d)\n", err);
 	}
@@ -241,4 +263,44 @@ BT_CONN_CB_DEFINE(conn_callbacks) = {
 	.connected        = connected,
 	.disconnected     = disconnected,
 	.security_changed = security_changed
+};
+
+//////////////////////////////////////////////////////////////////////
+
+void auth_cancel(struct bt_conn *conn)
+{
+	char addr[BT_ADDR_LE_STR_LEN];
+
+	bt_addr_le_to_str(bt_conn_get_dst(conn), addr, sizeof(addr));
+
+	printk("Pairing cancelled: %s\n", addr);
+}
+
+
+void pairing_complete(struct bt_conn *conn, bool bonded)
+{
+	char addr[BT_ADDR_LE_STR_LEN];
+
+	bt_addr_le_to_str(bt_conn_get_dst(conn), addr, sizeof(addr));
+
+	printk("Pairing completed: %s, bonded: %d\n", addr, bonded);
+}
+
+
+void pairing_failed(struct bt_conn *conn, enum bt_security_err reason)
+{
+	char addr[BT_ADDR_LE_STR_LEN];
+
+	bt_addr_le_to_str(bt_conn_get_dst(conn), addr, sizeof(addr));
+
+	printk("Pairing failed conn: %s, reason %d\n", addr, reason);
+}
+
+struct bt_conn_auth_cb conn_auth_callbacks = {
+	.cancel = auth_cancel,
+};
+
+struct bt_conn_auth_info_cb conn_auth_info_callbacks = {
+	.pairing_complete = pairing_complete,
+	.pairing_failed = pairing_failed
 };
